@@ -30,8 +30,15 @@ window.cropperAction = (action) => {
 window.openCropperWorkspace = (index) => {
     state.activeArtboardIndex = index; 
     const ab = state.currentArtboards[index]; 
+    const cropModal = document.getElementById("cropModal"); 
     const cropArea = document.getElementById("cropArea"); 
+    // Move modal to body to escape ancestor overflow clipping
+    if (cropModal.parentElement !== document.body) {
+        document.body.appendChild(cropModal);
+    }
+    cropModal.classList.remove("hidden");
     cropArea.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
 
     document.getElementById("artboardDisplay").innerHTML = `Artboard ${ab.artboard_number} <span class="text-xs text-slate-400 font-normal ml-2">(${ab.source_file})</span>`;
     
@@ -86,7 +93,7 @@ window.openCropperWorkspace = (index) => {
                     }
                 },
             });
-            cropArea.scrollIntoView({ behavior: "smooth", block: "center" });
+            // Modal is already centered — no scroll needed
             
             if (state.useAiMode) {
                 runAutoDetect(ab);
@@ -280,8 +287,8 @@ window.markCurrentArtboardDone = () => {
 };
 
 window.closeCropperWorkspace = () => { 
-    hideSection("cropArea"); 
-    document.getElementById("mainWorkspace").scrollIntoView({ behavior: "smooth", block: "start" }); 
+    document.getElementById("cropModal").classList.add("hidden"); 
+    document.body.style.overflow = ""; 
     renderArtboardGallery(); 
 };
 

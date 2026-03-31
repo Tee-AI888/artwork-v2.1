@@ -125,7 +125,7 @@ document.getElementById("aiFiles").addEventListener("change", (e) => {
 
     hideSection("textDataWorkspace");
     hideSection("mainWorkspace");
-    hideSection("cropArea");
+    hideSection("cropModal");
     hideSection("autoMappedSection");
     document.getElementById("artboardList").innerHTML = "";
     document.getElementById("recordCardsContainer").innerHTML = "";

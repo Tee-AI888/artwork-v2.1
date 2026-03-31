@@ -41,7 +41,7 @@ document.getElementById("btnSaveProgress").addEventListener("click", async () =>
     
     hideSection("textDataWorkspace"); 
     hideSection("mainWorkspace"); 
-    hideSection("cropArea");
+    hideSection("cropModal");
     
     document.getElementById("exportPanelTitle").innerHTML = `<i class="fa-solid fa-flag-checkered text-emerald-500 mr-2"></i> มีไฟล์รอ Export อยู่ในระบบ (${state.processedAIFiles.length} ไฟล์)`; 
     document.getElementById("exportPanelDesc").textContent = "หน้าจอถูกเคลียร์แล้ว! อัปโหลดไฟล์ .ai ถัดไป หรือกด Export ทีเดียวตอนจบงานได้เลย";

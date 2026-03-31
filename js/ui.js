@@ -165,7 +165,7 @@ window.syncTeamName = (value, sourceFile) => {
 
 window.updateRecordField = (idx, field, value) => { 
     state.currentTextData[idx][field] = value; 
-    if (!document.getElementById("cropArea").classList.contains("hidden")) {
+    if (!document.getElementById("cropModal").classList.contains("hidden")) {
         renderAvailableRecords(); 
     }
 };

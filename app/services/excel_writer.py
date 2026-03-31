@@ -22,7 +22,6 @@ import openpyxl
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
-from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker, TwoCellAnchor
 from openpyxl.utils import column_index_from_string
 from PIL import Image as PILImage
 
@@ -49,18 +48,36 @@ _IMAGE_COL_LETTERS = {
 }
 
 
-def _col_px(sheet, col_letter: str) -> int:
+def _col_emu(sheet, col_letter: str) -> int:
+    """Column width (character units) → EMU.  Calibri 11 / 96 DPI.
+    รองรับ column_dimensions แบบ range (min/max) ที่ openpyxl เก็บ."""
     default_w = sheet.sheet_format.defaultColWidth or 8.43
-    dim = sheet.column_dimensions.get(col_letter)
-    w   = dim.width if (dim and dim.width) else default_w
-    return max(1, int(w * 7.5))
+    col_idx   = column_index_from_string(col_letter)
+
+    # ค้นหาแบบ range-aware ก่อน (openpyxl อาจเก็บ width เป็น range เช่น min=18, max=54)
+    w = None
+    for dim in sheet.column_dimensions.values():
+        if dim.min and dim.max and dim.width:
+            if dim.min <= col_idx <= dim.max:
+                w = dim.width
+                break
+
+    # fallback: ค้นหาด้วย key ปกติ
+    if w is None:
+        dim = sheet.column_dimensions.get(col_letter)
+        w   = dim.width if (dim and dim.width) else default_w
+
+    mdw = 7  # max-digit-width for Calibri 11 at 96 DPI
+    px  = int(((256 * w + int(128 / mdw)) / 256) * mdw)
+    return max(10 * _EMU_PER_PX, px * _EMU_PER_PX)
 
 
-def _row_px(sheet, row: int) -> int:
+def _row_emu(sheet, row: int) -> int:
+    """Row height (points) → EMU.  1 pt = 12700 EMU."""
     default_h = sheet.sheet_format.defaultRowHeight or 15.0
     dim = sheet.row_dimensions.get(row)
     h   = dim.height if (dim and dim.height) else default_h
-    return max(1, int(h * 1.3333))
+    return max(12700, int(h * 12700))
 
 
 def _build_row_map(sheet) -> dict[str, int]:
@@ -134,28 +151,51 @@ def generate_excel_bytes(
             target_row = row_map[item_id]
             col_idx    = column_index_from_string(target_col_letter)  # 1-based
 
-            # TwoCellAnchor: stretch รูปให้เต็ม cell อัตโนมัติ
-            # ไม่ต้องคำนวณ pixel — Excel จัดการ scaling เอง
-            from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor
-            from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
+            # ── Scale-to-fit + center in cell (EMU-based) ────────────────────
+            pil_img = PILImage.open(io.BytesIO(img_data))
+            img_w_px, img_h_px = pil_img.size
+            pil_img.close()
 
-            xl_img = XLImage(io.BytesIO(img_data))  # embed bytes ต้นฉบับ resolution เต็ม
+            cell_w_emu = _col_emu(sheet, target_col_letter)
+            cell_h_emu = _row_emu(sheet, target_row)
 
-            anchor        = TwoCellAnchor()
-            anchor.editAs = "oneCell"               # ล็อคมุมบนซ้าย, ขยายตาม cell
+            # padding 2px each side
+            pad_emu  = _EMU_PER_PX * 2
+            avail_w  = max(1, cell_w_emu - pad_emu * 2)
+            avail_h  = max(1, cell_h_emu - pad_emu * 2)
 
-            # มุมบนซ้าย = cell นี้
-            anchor._from      = AnchorMarker(
-                col=col_idx - 1, colOff=0,
-                row=target_row - 1, rowOff=0,
+            img_w_emu = img_w_px * _EMU_PER_PX
+            img_h_emu = img_h_px * _EMU_PER_PX
+
+            # Scale to fill cell (up or down) maintaining aspect ratio
+            scale     = min(avail_w / img_w_emu, avail_h / img_h_emu)
+            disp_w    = int(img_w_emu * scale)
+            disp_h    = int(img_h_emu * scale)
+
+            # Center offsets
+            off_x = (cell_w_emu - disp_w) // 2
+            off_y = (cell_h_emu - disp_h) // 2
+
+            xl_img        = XLImage(io.BytesIO(img_data))
+            xl_img.width  = max(1, disp_w // _EMU_PER_PX)
+            xl_img.height = max(1, disp_h // _EMU_PER_PX)
+
+            anchor = OneCellAnchor(
+                _from=AnchorMarker(
+                    col=col_idx - 1,  colOff=off_x,
+                    row=target_row - 1, rowOff=off_y,
+                ),
+                ext=XDRPositiveSize2D(disp_w, disp_h),
             )
-            # มุมล่างขวา = cell ถัดไป (ขยายเต็ม cell)
-            anchor.to         = AnchorMarker(
-                col=col_idx, colOff=0,
-                row=target_row, rowOff=0,
-            )
-            xl_img.anchor     = anchor
+            xl_img.anchor = anchor
             sheet.add_image(xl_img)
+
+            print(f"[ExcelWriter] {fname} -> {target_col_letter}{target_row}: "
+                  f"img={img_w_px}x{img_h_px}px "
+                  f"cell={cell_w_emu}x{cell_h_emu}emu "
+                  f"scale={scale:.3f} "
+                  f"disp={disp_w}x{disp_h}emu "
+                  f"off=({off_x},{off_y})")
 
         out = io.BytesIO()
         wb.save(out)

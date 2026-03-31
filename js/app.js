@@ -17,8 +17,8 @@ window.addEventListener("load", async () => {
 });
 
 document.addEventListener('keydown', function(e) {
-    const cropArea = document.getElementById("cropArea");
-    if (!state.cropper || cropArea.classList.contains('hidden') || ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    const cropModal = document.getElementById("cropModal");
+    if (!state.cropper || cropModal.classList.contains('hidden') || ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
     
     const step = e.shiftKey ? 10 : 1; 
     const cropData = state.cropper.getData();
